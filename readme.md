@@ -1,11 +1,27 @@
-Yet another Terimnate Button (YaTB) for Eclipse
+Yet some other Terminate Buttons for Eclipse
 ====
+
+This plugin adds four buttons to the Eclipse console. Two for each kind of shutdown mentioned below.
+One of each set is for the active console, the other one to rule them all.
 
 ## Why
 
-Sometime we running the application with buzy threads which make Eclipse build-in process terminate button can't stop the process.
-That's why this new button here, it will force kill the process with `kill -9 <pid>` internally for Linux-like and OSX platform.
+### Soft shutdown
+Sometimes there are clean up tasks when shutting down certain processes.
+Eclipse however doesn't signal a normal shutdown and hence doesn't trigger these tasks.
+That's why this new button here. It will signal the process a normal shutdown request with `kill -SIGTERM` internally for Linux-like and OSX platforms.
+
+### Hard shutdown
+Sometimes processes are busy and don't react to the default shutdown action of Eclipse.
+The buttons make it possible to send a `kill -SIGKILL` signal to them.
 
 ## Installation
 
-Update site: https://github.com/missedone/yatb/raw/master/dist
+1. Download the dist folder in this repository
+2. in Eclipse open Help -> Install new Software... -> Add... -> Local...
+3. Select the dist folder
+4. Select the plugin and proceed like normal
+
+Based on the original YaTB plugin by Nick Tan.
+
+Big thanks to Christoph142 and missedone!
