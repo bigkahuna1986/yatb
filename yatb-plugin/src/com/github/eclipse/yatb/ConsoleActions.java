@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.debug.core.DebugException;
+import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.model.IProcess;
 import org.eclipse.debug.core.model.RuntimeProcess;
@@ -23,105 +24,159 @@ import org.eclipse.ui.part.IPageSite;
 
 public class ConsoleActions implements IConsolePageParticipant {
 
-  private IPageBookViewPage page;
-  private Action stop;
-  private IActionBars bars;
-  private IConsole console;
+	private IPageBookViewPage page;
+	private Action terminateHardAction;
+	private Action terminateAllHardAction;
+	private Action terminateSoftAction;
+	private Action terminateAllSoftAction;
+	private IActionBars bars;
+	private IConsole console;
 
-  @Override
-  public void init(final IPageBookViewPage page, final IConsole console) {
-    this.console = console;
-    this.page = page;
-    IPageSite site = page.getSite();
-    this.bars = site.getActionBars();
+	@Override
+	public void init(final IPageBookViewPage page, final IConsole console) {
+		this.console = console;
+		this.page = page;
+		IPageSite site = page.getSite();
+		this.bars = site.getActionBars();
 
-    createTerminateAllButton();
+		terminateHardAction = createTerminateHardButton();
+		terminateAllHardAction = createTerminateAllHardButton();
+		terminateSoftAction = createTerminateSoftButton();
+		terminateAllSoftAction = createTerminateAllSoftButton();
 
-    bars.getMenuManager().add(new Separator());
+		bars.getMenuManager().add(new Separator());
 
-    IToolBarManager toolbarManager = bars.getToolBarManager();
+		IToolBarManager toolbarManager = bars.getToolBarManager();
 
-    toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, stop);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateHardAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateAllHardAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateSoftAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateAllSoftAction);
 
-    bars.updateActionBars();
-  }
+		bars.updateActionBars();
+	}
 
-  private void createTerminateAllButton() {
-    ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_rem_co.gif");
-    this.stop = new Action("Kill Process", imageDescriptor) {
-      public void run() {
-        if (console instanceof ProcessConsole) {
-          RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
-              .getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
-          ILaunch launch = runtimeProcess.getLaunch();
-          stopProcess(launch);
-        }
-      }
-    };
-  }
+	private Action createTerminateHardButton() {
+		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_hard.gif");
+		return new Action("Kill Process", imageDescriptor) {
+			@Override
+			public void run() {
+				if (console instanceof ProcessConsole) {
+					RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
+							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
+					ILaunch launch = runtimeProcess.getLaunch();
+					stopProcess(launch, true);
+				}
+			}
+		};
+	}
 
-  private void stopProcess(ILaunch launch) {
-    if (launch != null && !launch.isTerminated()) {
-      try {
-        if (Platform.OS_WIN32.equals(Platform.getOS())) {
-          launch.terminate();
-        } else {
-          for (IProcess p : launch.getProcesses()) {
-            try {
-              Method m = p.getClass().getDeclaredMethod("getSystemProcess");
-              m.setAccessible(true);
-              Process proc = (Process) m.invoke(p);
+	private Action createTerminateAllHardButton() {
+		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_all_hard.gif");
+		return new Action("Kill All Processes", imageDescriptor) {
+			@Override
+			public void run() {
+				ILaunch[] launches = DebugPlugin.getDefault().getLaunchManager().getLaunches();
+				for (ILaunch launch : launches) {
+					stopProcess(launch, true);
+				}
+			}
+		};
+	}
 
-              Field f = proc.getClass().getDeclaredField("pid");
-              f.setAccessible(true);
-              int pid = (int) f.get(proc);
+	private Action createTerminateSoftButton() {
+		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_soft.gif");
+		return new Action("Request Shutdown from Process", imageDescriptor) {
+			@Override
+			public void run() {
+				if (console instanceof ProcessConsole) {
+					RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
+							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
+					ILaunch launch = runtimeProcess.getLaunch();
+					stopProcess(launch, false);
+				}
+			}
+		};
+	}
 
-              // force kill the process on OSX and Linux-like platform
-              // since on Linux the default behaviour of Process.destroy() is to
-              // gracefully shutdown
-              // which rarely can stop the busy process
-              Runtime rt = Runtime.getRuntime();
-              rt.exec("kill -9 " + pid);
-            } catch (Exception ex) {
-              Activator.log(ex);
-            }
-          }
-        }
-      } catch (DebugException e) {
-        Activator.log(e);
-      }
-    }
-  }
+	private Action createTerminateAllSoftButton() {
+		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_all_soft.gif");
+		return new Action("Request Shutdown from all Processes", imageDescriptor) {
+			@Override
+			public void run() {
+				ILaunch[] launches = DebugPlugin.getDefault().getLaunchManager().getLaunches();
+				for (ILaunch launch : launches) {
+					stopProcess(launch, false);
+				}
+			}
+		};
+	}
 
-  @Override
-  public void dispose() {
-    stop = null;
-    bars = null;
-    page = null;
-  }
+	private void stopProcess(ILaunch launch, boolean hard) {
+		if (launch != null && !launch.isTerminated()) {
+			try {
+				if (Platform.OS_WIN32.equals(Platform.getOS())) {
+					launch.terminate();
+				} else {
+					for (IProcess p : launch.getProcesses()) {
+						try {
+							Method m = p.getClass().getDeclaredMethod("getSystemProcess");
+							m.setAccessible(true);
+							Process proc = (Process) m.invoke(p);
 
-  @Override
-  public Object getAdapter(Class adapter) {
-    return null;
-  }
+							Field f = proc.getClass().getDeclaredField("pid");
+							f.setAccessible(true);
+							int pid = (int) f.get(proc);
 
-  @Override
-  public void activated() {
-    updateVis();
-  }
+							Runtime rt = Runtime.getRuntime();
+							if (hard)
+								rt.exec("kill -SIGKILL " + pid);
+							else
+								rt.exec("kill -SIGTERM " + pid);
+						} catch (Exception ex) {
+							Activator.log(ex);
+						}
+					}
+				}
+			} catch (DebugException e) {
+				Activator.log(e);
+			}
+		}
+	}
 
-  @Override
-  public void deactivated() {
-    updateVis();
-  }
+	@Override
+	public void dispose() {
+		terminateHardAction = null;
+		terminateAllHardAction = null;
+		terminateSoftAction = null;
+		terminateAllSoftAction = null;
+		bars = null;
+		page = null;
+	}
 
-  private void updateVis() {
+	@Override
+	public Object getAdapter(Class adapter) {
+		return null;
+	}
 
-    if (page == null)
-      return;
-    boolean isEnabled = true;
-    stop.setEnabled(isEnabled);
-    bars.updateActionBars();
-  }
+	@Override
+	public void activated() {
+		updateVis();
+	}
+
+	@Override
+	public void deactivated() {
+		updateVis();
+	}
+
+	private void updateVis() {
+		if (page == null)
+			return;
+		terminateHardAction.setEnabled(true);
+		terminateAllHardAction.setEnabled(true);
+		terminateSoftAction.setEnabled(true);
+		terminateAllSoftAction.setEnabled(true);
+		bars.updateActionBars();
+	}
 
 }
