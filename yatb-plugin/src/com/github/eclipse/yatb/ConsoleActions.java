@@ -4,8 +4,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Objects;
 
-import org.eclipse.core.runtime.Platform;
-import org.eclipse.debug.core.DebugException;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.model.IProcess;
@@ -95,34 +93,11 @@ public class ConsoleActions implements IConsolePageParticipant {
 			m.setAccessible(true);
 			Process proc = (Process) m.invoke(p);
 
-			if (Platform.OS_WIN32.equals(Platform.getOS())) {
-				windowsKill(proc, hard);
-			} else {
-				unixKill(proc, hard);
-			}
+			if(hard)
+				proc.destroyForcibly();
+			else
+				proc.destroy();
 		} catch (ReflectiveOperationException e) {
-			Activator.log(e);
-		}
-	}
-
-	private final void unixKill(Process p, boolean hard) {
-		try {
-			if (hard)
-				Runtime.getRuntime().exec("kill -SIGKILL " + p.pid());
-			else
-				Runtime.getRuntime().exec("kill -SIGTERM " + p.pid());
-		} catch (Exception e) {
-			Activator.log(e);
-		}
-	}
-
-	private final void windowsKill(Process p, boolean hard) {
-		try {
-			if (hard)
-				Runtime.getRuntime().exec("taskkill /pid " + p.pid());
-			else
-				Runtime.getRuntime().exec("taskkill /f /pid " + p.pid());
-		} catch (Exception e) {
 			Activator.log(e);
 		}
 	}
