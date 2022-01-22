@@ -1,7 +1,8 @@
 package com.github.eclipse.yatb;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Objects;
 
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.debug.core.DebugException;
@@ -39,10 +40,12 @@ public class ConsoleActions implements IConsolePageParticipant {
 		IPageSite site = page.getSite();
 		this.bars = site.getActionBars();
 
-		terminateHardAction = createTerminateHardButton();
-		terminateAllHardAction = createTerminateAllHardButton();
-		terminateSoftAction = createTerminateSoftButton();
-		terminateAllSoftAction = createTerminateAllSoftButton();
+		terminateHardAction = createButton("Kill Process", "/icons/terminate_hard.gif", true);
+		terminateSoftAction = createButton("Request Shutdown from Process", "/icons/terminate_soft.gif", false);
+
+		terminateAllHardAction = createAllButton("Kill All Processes", "/icons/terminate_all_hard.gif", true);
+		terminateAllSoftAction = createAllButton("Request Shutdown from all Processes", "/icons/terminate_all_soft.gif",
+				false);
 
 		bars.getMenuManager().add(new Separator());
 
@@ -56,91 +59,71 @@ public class ConsoleActions implements IConsolePageParticipant {
 		bars.updateActionBars();
 	}
 
-	private Action createTerminateHardButton() {
-		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_hard.gif");
-		return new Action("Kill Process", imageDescriptor) {
+	private Action createButton(String name, String icon, boolean hard) {
+		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
 				if (console instanceof ProcessConsole) {
 					RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
 							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
-					ILaunch launch = runtimeProcess.getLaunch();
-					stopProcess(launch, true);
+					stopProcess(runtimeProcess.getLaunch(), hard);
 				}
 			}
 		};
 	}
 
-	private Action createTerminateAllHardButton() {
-		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_all_hard.gif");
-		return new Action("Kill All Processes", imageDescriptor) {
+	private Action createAllButton(String name, String icon, boolean hard) {
+		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
-				ILaunch[] launches = DebugPlugin.getDefault().getLaunchManager().getLaunches();
-				for (ILaunch launch : launches) {
-					stopProcess(launch, true);
-				}
-			}
-		};
-	}
-
-	private Action createTerminateSoftButton() {
-		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_soft.gif");
-		return new Action("Request Shutdown from Process", imageDescriptor) {
-			@Override
-			public void run() {
-				if (console instanceof ProcessConsole) {
-					RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
-							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
-					ILaunch launch = runtimeProcess.getLaunch();
-					stopProcess(launch, false);
-				}
-			}
-		};
-	}
-
-	private Action createTerminateAllSoftButton() {
-		ImageDescriptor imageDescriptor = ImageDescriptor.createFromFile(getClass(), "/icons/terminate_all_soft.gif");
-		return new Action("Request Shutdown from all Processes", imageDescriptor) {
-			@Override
-			public void run() {
-				ILaunch[] launches = DebugPlugin.getDefault().getLaunchManager().getLaunches();
-				for (ILaunch launch : launches) {
-					stopProcess(launch, false);
-				}
+				// Dont' really know if Objects::nonNull is actually required...
+				Arrays.stream(DebugPlugin.getDefault().getLaunchManager().getLaunches()).filter(Objects::nonNull)
+						.forEach(l -> stopProcess(l, hard));
 			}
 		};
 	}
 
 	private void stopProcess(ILaunch launch, boolean hard) {
-		if (launch != null && !launch.isTerminated()) {
-			try {
-				if (Platform.OS_WIN32.equals(Platform.getOS())) {
-					launch.terminate();
-				} else {
-					for (IProcess p : launch.getProcesses()) {
-						try {
-							Method m = p.getClass().getDeclaredMethod("getSystemProcess");
-							m.setAccessible(true);
-							Process proc = (Process) m.invoke(p);
+		if (!launch.isTerminated()) {
+			Arrays.stream(launch.getProcesses()).forEach(p -> kill(p, hard));
+		}
+	}
 
-							Field f = proc.getClass().getDeclaredField("pid");
-							f.setAccessible(true);
-							int pid = (int) f.get(proc);
+	private final void kill(IProcess p, boolean hard) {
+		try {
+			Method m = p.getClass().getDeclaredMethod("getSystemProcess");
+			m.setAccessible(true);
+			Process proc = (Process) m.invoke(p);
 
-							Runtime rt = Runtime.getRuntime();
-							if (hard)
-								rt.exec("kill -SIGKILL " + pid);
-							else
-								rt.exec("kill -SIGTERM " + pid);
-						} catch (Exception ex) {
-							Activator.log(ex);
-						}
-					}
-				}
-			} catch (DebugException e) {
-				Activator.log(e);
+			if (Platform.OS_WIN32.equals(Platform.getOS())) {
+				windowsKill(proc, hard);
+			} else {
+				unixKill(proc, hard);
 			}
+		} catch (ReflectiveOperationException e) {
+			Activator.log(e);
+		}
+	}
+
+	private final void unixKill(Process p, boolean hard) {
+		try {
+			if (hard)
+				Runtime.getRuntime().exec("kill -SIGKILL " + p.pid());
+			else
+				Runtime.getRuntime().exec("kill -SIGTERM " + p.pid());
+		} catch (Exception e) {
+			Activator.log(e);
+		}
+	}
+
+	private final void windowsKill(Process p, boolean hard) {
+		try {
+			if (hard)
+				Runtime.getRuntime().exec("taskkill /pid " + p.pid());
+			else
+				Runtime.getRuntime().exec("taskkill /f /pid " + p.pid());
+		} catch (Exception e) {
+			Activator.log(e);
 		}
 	}
 

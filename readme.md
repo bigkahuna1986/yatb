@@ -4,6 +4,8 @@ Yet some other Terminate Buttons for Eclipse
 This plugin adds four buttons to the Eclipse console. Two for each kind of shutdown mentioned below.
 One of each set is for the active console, the other one to rule them all.
 
+2.x branch requires Java 11!
+
 ## Why
 
 ### Soft shutdown
