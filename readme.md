@@ -4,6 +4,8 @@ Yet some other Terminate Buttons for Eclipse
 This plugin adds four buttons to the Eclipse console. Two for each kind of shutdown mentioned below.
 One of each set is for the active console, the other one to rule them all.
 
+Now with more Windows support!
+
 2.x branch requires Java 11!
 
 ## Why
@@ -20,8 +22,9 @@ The buttons make it possible to send a `kill -SIGKILL` signal to them.
 ## Installation
 
 1. Download the dist folder in this repository
-2. in Eclipse open Help -> Install new Software... -> Add... -> Local...
-3. Select the dist folder
+2. run 'mvn package' in the root directory
+3. in Eclipse open Help -> Install new Software... -> Add... -> Local...
+3. Select the site/target folder
 4. Select the plugin and proceed like normal
 
 Based on the original YaTB plugin by Nick Tan.
