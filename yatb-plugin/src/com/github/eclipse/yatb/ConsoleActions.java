@@ -94,9 +94,9 @@ public class ConsoleActions implements IConsolePageParticipant {
 
 			if (Platform.OS_WIN32.equals(Platform.getOS())) {
 				if (hard)
-					Runtime.getRuntime().exec("taskkill /pid " + pid);
-				else
 					Runtime.getRuntime().exec("taskkill /f /pid " + pid);
+				else
+					Runtime.getRuntime().exec("taskkill /pid " + pid);
 			} else {
 				if (hard)
 					Runtime.getRuntime().exec("kill -SIGKILL " + pid);
