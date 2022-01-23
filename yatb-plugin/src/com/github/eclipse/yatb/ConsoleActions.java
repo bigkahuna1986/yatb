@@ -1,8 +1,10 @@
 package com.github.eclipse.yatb;
 
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 
+import org.eclipse.core.runtime.Platform;
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.model.IProcess;
@@ -88,12 +90,20 @@ public class ConsoleActions implements IConsolePageParticipant {
 			Method m = p.getClass().getDeclaredMethod("getSystemProcess");
 			m.setAccessible(true);
 			Process proc = (Process) m.invoke(p);
+			final long pid = proc.pid();
 
-			if (hard)
-				proc.destroyForcibly();
-			else
-				proc.destroy();
-		} catch (ReflectiveOperationException e) {
+			if (Platform.OS_WIN32.equals(Platform.getOS())) {
+				if (hard)
+					Runtime.getRuntime().exec("taskkill /pid " + pid);
+				else
+					Runtime.getRuntime().exec("taskkill /f /pid " + pid);
+			} else {
+				if (hard)
+					Runtime.getRuntime().exec("kill -SIGKILL " + pid);
+				else
+					Runtime.getRuntime().exec("kill -SIGTERM " + pid);
+			}
+		} catch (IOException | ReflectiveOperationException e) {
 			Activator.log(e);
 		}
 	}
