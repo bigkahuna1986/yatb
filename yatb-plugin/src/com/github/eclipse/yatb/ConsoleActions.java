@@ -2,13 +2,11 @@ package com.github.eclipse.yatb;
 
 import java.lang.reflect.Method;
 import java.util.Arrays;
-import java.util.Objects;
 
 import org.eclipse.debug.core.DebugPlugin;
 import org.eclipse.debug.core.ILaunch;
 import org.eclipse.debug.core.model.IProcess;
 import org.eclipse.debug.core.model.RuntimeProcess;
-import org.eclipse.debug.internal.ui.views.console.ProcessConsole;
 import org.eclipse.debug.ui.IDebugUIConstants;
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IToolBarManager;
@@ -18,8 +16,8 @@ import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleConstants;
 import org.eclipse.ui.console.IConsolePageParticipant;
+import org.eclipse.ui.console.TextConsole;
 import org.eclipse.ui.part.IPageBookViewPage;
-import org.eclipse.ui.part.IPageSite;
 
 public class ConsoleActions implements IConsolePageParticipant {
 
@@ -35,8 +33,7 @@ public class ConsoleActions implements IConsolePageParticipant {
 	public void init(final IPageBookViewPage page, final IConsole console) {
 		this.console = console;
 		this.page = page;
-		IPageSite site = page.getSite();
-		this.bars = site.getActionBars();
+		this.bars = page.getSite().getActionBars();
 
 		terminateHardAction = createButton("Kill Process", "/icons/terminate_hard.gif", true);
 		terminateSoftAction = createButton("Request Shutdown from Process", "/icons/terminate_soft.gif", false);
@@ -61,8 +58,8 @@ public class ConsoleActions implements IConsolePageParticipant {
 		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
-				if (console instanceof ProcessConsole) {
-					RuntimeProcess runtimeProcess = (RuntimeProcess) ((ProcessConsole) console)
+				if (console instanceof TextConsole) {
+					RuntimeProcess runtimeProcess = (RuntimeProcess) ((TextConsole) console)
 							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
 					stopProcess(runtimeProcess.getLaunch(), hard);
 				}
