@@ -74,8 +74,7 @@ public class ConsoleActions implements IConsolePageParticipant {
 		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
-				// Dont' really know if Objects::nonNull is actually required...
-				Arrays.stream(DebugPlugin.getDefault().getLaunchManager().getLaunches()).filter(Objects::nonNull)
+				Arrays.stream(DebugPlugin.getDefault().getLaunchManager().getLaunches())
 						.forEach(l -> stopProcess(l, hard));
 			}
 		};
@@ -93,7 +92,7 @@ public class ConsoleActions implements IConsolePageParticipant {
 			m.setAccessible(true);
 			Process proc = (Process) m.invoke(p);
 
-			if(hard)
+			if (hard)
 				proc.destroyForcibly();
 			else
 				proc.destroy();
