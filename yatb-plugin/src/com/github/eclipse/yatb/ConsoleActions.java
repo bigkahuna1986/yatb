@@ -87,22 +87,25 @@ public class ConsoleActions implements IConsolePageParticipant {
 
 	private final void kill(IProcess p, boolean hard) {
 		try {
-			Method m = p.getClass().getDeclaredMethod("getSystemProcess");
+			final Method m = p.getClass().getDeclaredMethod("getSystemProcess");
 			m.setAccessible(true);
-			Process proc = (Process) m.invoke(p);
+			final Process proc = (Process) m.invoke(p);
 			final long pid = proc.pid();
+			// Could just call Process.toHandle()... but it's documented as possibly
+			// throwing unsupported.
+			ProcessHandle handle = ProcessHandle.of(pid)
+					.orElseThrow(() -> new IOException("Could not get phandle for " + pid));
 
-			if (Platform.OS_WIN32.equals(Platform.getOS())) {
+			// Windows ProcessImpl doesn't implement destroyForcibly.
+			if (hard && Platform.OS_WIN32.equals(Platform.getOS()))
+				Runtime.getRuntime().exec("taskkill /f /pid " + pid);
+			else {
 				if (hard)
-					Runtime.getRuntime().exec("taskkill /f /pid " + pid);
+					handle.destroyForcibly();
 				else
-					Runtime.getRuntime().exec("taskkill /pid " + pid);
-			} else {
-				if (hard)
-					Runtime.getRuntime().exec("kill -SIGKILL " + pid);
-				else
-					Runtime.getRuntime().exec("kill -SIGTERM " + pid);
+					handle.destroy();
 			}
+
 		} catch (IOException | ReflectiveOperationException e) {
 			Activator.log(e);
 		}
