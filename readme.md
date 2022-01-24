@@ -1,6 +1,8 @@
 Yet some other Terminate Buttons for Eclipse
 ====
 
+1.x bracnch required JAVA 7/8 to compile!
+
 This plugin adds four buttons to the Eclipse console. Two for each kind of shutdown mentioned below.
 One of each set is for the active console, the other one to rule them all.
 
