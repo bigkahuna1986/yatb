@@ -18,53 +18,78 @@ import org.eclipse.ui.IActionBars;
 import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleConstants;
 import org.eclipse.ui.console.IConsolePageParticipant;
-import org.eclipse.ui.console.TextConsole;
+import org.eclipse.ui.console.IOConsole;
 import org.eclipse.ui.part.IPageBookViewPage;
 
 public class ConsoleActions implements IConsolePageParticipant {
 
-	private IPageBookViewPage page;
-	private Action terminateHardAction;
-	private Action terminateAllHardAction;
-	private Action terminateSoftAction;
-	private Action terminateAllSoftAction;
-	private IActionBars bars;
-	private IConsole console;
+	private IPageBookViewPage _page;
+	private Action _forceStopAction;
+	private Action _forceStopAllAction;
+	private Action _stopAction;
+	private Action _stopAllAction;
+	private IActionBars _bars;
+	private IOConsole _console;
+
+	private boolean _enabled = true;
+	private ProcessHandle _handle;
 
 	@Override
-	public void init(final IPageBookViewPage page, final IConsole console) {
-		this.console = console;
-		this.page = page;
-		this.bars = page.getSite().getActionBars();
+	public void init(IPageBookViewPage page, IConsole console) {
+		_console = (IOConsole) console;
+		_page = page;
+		_bars = page.getSite().getActionBars();
 
-		terminateHardAction = createButton("Kill Process", "/icons/terminate_hard.gif", true);
-		terminateSoftAction = createButton("Request Shutdown from Process", "/icons/terminate_soft.gif", false);
+		_forceStopAction = createButton("Force Stop Process", "/icons/terminate_hard.gif", true);
+		_stopAction = createButton("Shutdown Process", "/icons/terminate_soft.gif", false);
 
-		terminateAllHardAction = createAllButton("Kill All Processes", "/icons/terminate_all_hard.gif", true);
-		terminateAllSoftAction = createAllButton("Request Shutdown from all Processes", "/icons/terminate_all_soft.gif",
-				false);
+		_forceStopAllAction = createAllButton("Force Stop All Processes", "/icons/terminate_all_hard.gif", true);
+		_stopAllAction = createAllButton("Shutdown all Processes", "/icons/terminate_all_soft.gif", false);
 
-		bars.getMenuManager().add(new Separator());
+		_bars.getMenuManager().add(new Separator());
 
-		IToolBarManager toolbarManager = bars.getToolBarManager();
+		final IToolBarManager toolbarManager = _bars.getToolBarManager();
 
-		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateHardAction);
-		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateAllHardAction);
-		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateSoftAction);
-		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, terminateAllSoftAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, _forceStopAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, _forceStopAllAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, _stopAction);
+		toolbarManager.appendToGroup(IConsoleConstants.LAUNCH_GROUP, _stopAllAction);
 
-		bars.updateActionBars();
+		_bars.updateActionBars();
+
+		try {
+			RuntimeProcess p = (RuntimeProcess) _console.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
+			_handle = handle(p);
+			_handle.onExit().thenRun(() -> {
+				_enabled = false;
+				_forceStopAction.setEnabled(_enabled);
+				_stopAction.setEnabled(_enabled);
+			});
+		} catch (Exception e) {
+			Activator.log(e);
+			_enabled = false;
+		}
+	}
+
+	private static final ProcessHandle handle(IProcess p) {
+		try {
+			final Method m = p.getClass().getDeclaredMethod("getSystemProcess");
+			m.setAccessible(true);
+			final Process proc = (Process) m.invoke(p);
+			final long pid = proc.pid();
+			// Could just call Process.toHandle()... but it's documented as possibly
+			// throwing unsupported.
+			return ProcessHandle.of(pid).orElseThrow(() -> new IOException("Could not get pandle for " + pid));
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	private Action createButton(String name, String icon, boolean hard) {
 		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
-				if (console instanceof TextConsole) {
-					RuntimeProcess runtimeProcess = (RuntimeProcess) ((TextConsole) console)
-							.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
-					stopProcess(runtimeProcess.getLaunch(), hard);
-				}
+				kill(_handle, hard);
 			}
 		};
 	}
@@ -81,24 +106,15 @@ public class ConsoleActions implements IConsolePageParticipant {
 
 	private void stopProcess(ILaunch launch, boolean hard) {
 		if (!launch.isTerminated()) {
-			Arrays.stream(launch.getProcesses()).forEach(p -> kill(p, hard));
+			Arrays.stream(launch.getProcesses()).map(ConsoleActions::handle).forEach(p -> kill(p, hard));
 		}
 	}
 
-	private final void kill(IProcess p, boolean hard) {
+	private final void kill(ProcessHandle handle, boolean hard) {
 		try {
-			final Method m = p.getClass().getDeclaredMethod("getSystemProcess");
-			m.setAccessible(true);
-			final Process proc = (Process) m.invoke(p);
-			final long pid = proc.pid();
-			// Could just call Process.toHandle()... but it's documented as possibly
-			// throwing unsupported.
-			ProcessHandle handle = ProcessHandle.of(pid)
-					.orElseThrow(() -> new IOException("Could not get phandle for " + pid));
-
 			// Windows ProcessImpl doesn't implement destroyForcibly.
 			if (hard && Platform.OS_WIN32.equals(Platform.getOS()))
-				Runtime.getRuntime().exec("taskkill /f /pid " + pid);
+				Runtime.getRuntime().exec("taskkill /f /pid " + _handle.pid());
 			else {
 				if (hard)
 					handle.destroyForcibly();
@@ -106,19 +122,19 @@ public class ConsoleActions implements IConsolePageParticipant {
 					handle.destroy();
 			}
 
-		} catch (IOException | ReflectiveOperationException e) {
+		} catch (IOException e) {
 			Activator.log(e);
 		}
 	}
 
 	@Override
 	public void dispose() {
-		terminateHardAction = null;
-		terminateAllHardAction = null;
-		terminateSoftAction = null;
-		terminateAllSoftAction = null;
-		bars = null;
-		page = null;
+		_forceStopAction = null;
+		_forceStopAllAction = null;
+		_stopAction = null;
+		_stopAllAction = null;
+		_bars = null;
+		_page = null;
 	}
 
 	@Override
@@ -137,13 +153,16 @@ public class ConsoleActions implements IConsolePageParticipant {
 	}
 
 	private void updateVis() {
-		if (page == null)
+		if (_page == null)
 			return;
-		terminateHardAction.setEnabled(true);
-		terminateAllHardAction.setEnabled(true);
-		terminateSoftAction.setEnabled(true);
-		terminateAllSoftAction.setEnabled(true);
-		bars.updateActionBars();
+
+		_forceStopAction.setEnabled(_enabled);
+		_stopAction.setEnabled(_enabled);
+
+		_forceStopAllAction.setEnabled(true);
+		_stopAllAction.setEnabled(true);
+
+		_bars.updateActionBars();
 	}
 
 }
