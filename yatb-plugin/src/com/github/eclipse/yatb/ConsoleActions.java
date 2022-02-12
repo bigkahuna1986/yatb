@@ -3,6 +3,7 @@ package com.github.eclipse.yatb;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Optional;
 
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.debug.core.DebugPlugin;
@@ -59,11 +60,13 @@ public class ConsoleActions implements IConsolePageParticipant {
 
 		try {
 			RuntimeProcess p = (RuntimeProcess) _console.getAttribute(IDebugUIConstants.ATTR_CONSOLE_PROCESS);
-			_handle = handle(p);
-			_handle.onExit().thenRun(() -> {
-				_enabled = false;
-				_forceStopAction.setEnabled(_enabled);
-				_stopAction.setEnabled(_enabled);
+			handle(p).ifPresent(handle -> {
+				_handle = handle;
+				_handle.onExit().thenRun(() -> {
+					_enabled = false;
+					_forceStopAction.setEnabled(_enabled);
+					_stopAction.setEnabled(_enabled);
+				});
 			});
 		} catch (Exception e) {
 			Activator.log(e);
@@ -71,15 +74,17 @@ public class ConsoleActions implements IConsolePageParticipant {
 		}
 	}
 
-	private static final ProcessHandle handle(IProcess p) {
+	private static final Optional<ProcessHandle> handle(IProcess p) {
 		try {
 			final Method m = p.getClass().getDeclaredMethod("getSystemProcess");
 			m.setAccessible(true);
 			final Process proc = (Process) m.invoke(p);
+			if (proc == null)
+				return Optional.empty();
 			final long pid = proc.pid();
 			// Could just call Process.toHandle()... but it's documented as possibly
 			// throwing unsupported.
-			return ProcessHandle.of(pid).orElseThrow(() -> new IOException("Could not get pandle for " + pid));
+			return ProcessHandle.of(pid);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -106,7 +111,8 @@ public class ConsoleActions implements IConsolePageParticipant {
 
 	private void stopProcess(ILaunch launch, boolean hard) {
 		if (!launch.isTerminated()) {
-			Arrays.stream(launch.getProcesses()).map(ConsoleActions::handle).forEach(p -> kill(p, hard));
+			Arrays.stream(launch.getProcesses()).map(ConsoleActions::handle).flatMap(Optional::stream)
+					.forEach(p -> kill(p, hard));
 		}
 	}
 
