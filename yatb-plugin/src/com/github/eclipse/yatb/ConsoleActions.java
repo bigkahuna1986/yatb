@@ -2,7 +2,10 @@ package com.github.eclipse.yatb;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.core.runtime.Platform;
@@ -103,8 +106,18 @@ public class ConsoleActions implements IConsolePageParticipant {
 		return new Action(name, ImageDescriptor.createFromFile(getClass(), icon)) {
 			@Override
 			public void run() {
-				Arrays.stream(DebugPlugin.getDefault().getLaunchManager().getLaunches())
-						.forEach(l -> stopProcess(l, hard));
+				final List<ILaunch> launches = new ArrayList<>(
+						Arrays.asList(DebugPlugin.getDefault().getLaunchManager().getLaunches()));
+				Collections.reverse(launches);
+
+				launches.forEach(l -> {
+					try {
+						Thread.sleep(50);
+					} catch (InterruptedException e) {
+						// bury
+					}
+					stopProcess(l, hard);
+				});
 			}
 		};
 	}
