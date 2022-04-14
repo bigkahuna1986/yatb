@@ -3,26 +3,26 @@ Yet some other Terminate Buttons for Eclipse
 
 This project is based off the work of Nick Tan, with modifications provided by Christoph142 and missedone.
 
-This plugin adds four buttons to the Eclipse console. Two for each kind of shutdown mentioned below.
-One of each set is for the active console, the other one to rule them all.
+## 2.x branch requires Java 11!
 
-2.x branch requires Java 11!
+## The problem
+Eclipse uses the standard Java call Process.destroy() which sends SIGTERM (or WM_CLOSE) but also closes stdin, stdout and stderr. Closing these streams can cause a developer to lose insight into
+the shutdown process.
 
-## Why
+## The solution
+YaTB adds 4 buttons. 2 buttons to terminate all applications (gracefully or forcefully), and 2 buttons to stop the currently active application (gracefully or forcefully). There are no follow up
+signals so it is up to the developer to know when to force shutdown vs graceful. This is intentional. 
 
-### Soft shutdown
-Eclipse stops processes using the built in Java call Process.destroy(). This will send SIGTERM on Unix systems, or WM_CLOSE on windows. It also closes stdin, stdout, and stderr
-so the developer no longer has insight into any logging from the application if it fails to stop.
-These buttons call the new ProcessHandle.destroy() api which only sends SIGTERM/WM_CLOSE, allowing the ide to continue showing any output.
+Note: On windows systems, Java does not support the ProcessHandle.destroyForcibly call, so we get around that by running:
 
-### Hard shutdown
-If a process should fail to stop in a timely manner, the hard shutdown buttons will force the application to shutdown using SIGKILL on Unix systems, or by calling "taskkill /f /pid %pid%" on 
-windows. 
+```shell
+taskkill /f /pid %pid%
+```
 
 ## Installation
 
 1. Download the dist folder in this repository
 2. run 'mvn package' in the root directory
 3. in Eclipse open Help -> Install new Software... -> Add... -> Local...
-3. Select the site/target folder
+3. Select the site/target/site folder
 4. Select the plugin and proceed like normal
